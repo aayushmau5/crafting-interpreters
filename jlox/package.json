@@ -1,0 +1,17 @@
+{
+  "name": "jlox",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/scanner.js",
+  "scripts": {
+    "start": "node dist/scanner.js",
+    "watch": "tsc --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^16.4.13",
+    "typescript": "^4.3.5"
+  }
+}
