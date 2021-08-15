@@ -4,8 +4,11 @@ import { createInterface } from "readline";
 
 import Scanner from "./scanner";
 import { SyntaxError } from "./errors";
+import { Token, TokenType } from "./token";
+import { Parser } from "./parser";
+import { AstPrinter } from "./astPrinter";
 
-export default class Lox {
+export class Lox {
   static hadError = false;
   static main(args: string[]) {
     if (args.length > 1) {
@@ -55,7 +58,12 @@ export default class Lox {
   static run(source: string) {
     const scanner = new Scanner(source);
     const tokens = scanner.scanTokens();
-    console.log(tokens);
+    const parser = new Parser(tokens);
+    const expression = parser.parse();
+
+    if (this.hadError || expression === null) return;
+
+    console.log(new AstPrinter().print(expression));
   }
 
   static error(line: number, message: string) {
@@ -65,6 +73,14 @@ export default class Lox {
   static report(line: number, where: string, message: string) {
     this.hadError = true;
     throw new SyntaxError(line, where, message);
+  }
+
+  static parseError(token: Token, message: string) {
+    if (token.type == TokenType.EOF) {
+      this.report(token.line, " at end", message);
+    } else {
+      this.report(token.line, " at '" + token.lexeme + "'", message);
+    }
   }
 }
 

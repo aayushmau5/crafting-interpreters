@@ -11,3 +11,5 @@ export class SyntaxError extends Error {
     this.where = where;
   }
 }
+
+export class ParseError extends Error {}

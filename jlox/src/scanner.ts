@@ -8,7 +8,7 @@
 // Maximal munch (whichever one matches the most characters wins)
 
 import { TokenType, Token } from "./token";
-import Lox from "./main";
+import { Lox } from "./main";
 
 const keywords: Record<string, TokenType> = {
   and: TokenType.AND,
