@@ -7,7 +7,7 @@ export class AstPrinter implements Visitor<string> {
   }
 
   visitGroupingExpr(expr: Grouping) {
-    return this.parenthesize("group", expr.expresion);
+    return this.parenthesize("group", expr.expression);
   }
 
   visitLiteralExpr(expr: Literal) {

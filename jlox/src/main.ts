@@ -1,15 +1,20 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { createInterface } from "readline";
+import { inspect } from "util";
 
 import Scanner from "./scanner";
-import { SyntaxError } from "./errors";
+import { RuntimeError, SyntaxError } from "./errors";
 import { Token, TokenType } from "./token";
 import { Parser } from "./parser";
 import { AstPrinter } from "./astPrinter";
+import { Interpreter } from "./interpreter";
 
 export class Lox {
+  private static interpreter = new Interpreter();
+
   static hadError = false;
+  static hadRuntimeError = false;
   static main(args: string[]) {
     if (args.length > 1) {
       console.log("Usage: jlox [script]");
@@ -24,6 +29,9 @@ export class Lox {
   static runFile(path: string) {
     if (this.hadError) {
       process.exit(65);
+    }
+    if (this.hadRuntimeError) {
+      process.exit(70);
     }
     const sourceCode = readFileSync(resolve(path), "utf-8");
     this.run(sourceCode);
@@ -63,7 +71,10 @@ export class Lox {
 
     if (this.hadError || expression === null) return;
 
-    console.log(new AstPrinter().print(expression));
+    console.log(inspect(expression, false, null, true));
+
+    // console.log(new AstPrinter().print(expression));
+    this.interpreter.interpret(expression);
   }
 
   static error(line: number, message: string) {
@@ -81,6 +92,11 @@ export class Lox {
     } else {
       this.report(token.line, " at '" + token.lexeme + "'", message);
     }
+  }
+
+  static runtimeError(error: RuntimeError) {
+    console.log(`${error.message}\n[line ${error.token.line}]`);
+    this.hadRuntimeError = true;
   }
 }
 

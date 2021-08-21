@@ -45,9 +45,9 @@ export class Binary implements Expr {
 }
 
 export class Grouping implements Expr {
-  expresion: Expr;
+  expression: Expr;
   constructor(expression: Expr) {
-    this.expresion = expression;
+    this.expression = expression;
   }
 
   accept<R>(visitor: Visitor<R>) {

@@ -1,3 +1,5 @@
+import { Token } from "./token";
+
 export class SyntaxError extends Error {
   name = "SyntaxError";
   message: string;
@@ -13,3 +15,13 @@ export class SyntaxError extends Error {
 }
 
 export class ParseError extends Error {}
+
+export class RuntimeError extends Error {
+  name = "RuntimeError";
+  token: Token;
+
+  constructor(token: Token, message: string) {
+    super(message);
+    this.token = token;
+  }
+}
