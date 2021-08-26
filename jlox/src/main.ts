@@ -7,7 +7,6 @@ import Scanner from "./scanner";
 import { RuntimeError, SyntaxError } from "./errors";
 import { Token, TokenType } from "./token";
 import { Parser } from "./parser";
-import { AstPrinter } from "./astPrinter";
 import { Interpreter } from "./interpreter";
 
 export class Lox {
@@ -66,15 +65,16 @@ export class Lox {
   static run(source: string) {
     const scanner = new Scanner(source);
     const tokens = scanner.scanTokens();
+    console.log(inspect(tokens, false, null, true));
     const parser = new Parser(tokens);
-    const expression = parser.parse();
+    const statments = parser.parse();
 
-    if (this.hadError || expression === null) return;
+    if (this.hadError) return;
 
-    console.log(inspect(expression, false, null, true));
+    console.log(inspect(statments, false, null, true));
 
     // console.log(new AstPrinter().print(expression));
-    this.interpreter.interpret(expression);
+    this.interpreter.interpret(statments);
   }
 
   static error(line: number, message: string) {

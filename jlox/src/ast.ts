@@ -14,6 +14,15 @@ Recursive descent (A parsing technique)
 
 top-down parser
   Starts from the top or outermost grammar rule and works its way down into the nested subexpressions.
+
+two simplest types of statements:
+1. Expression statement
+2. print statement
+
+program        → statement* EOF ;
+statement      → exprStmt | printStmt ;
+exprStmt       → expression ";" ;
+printStmt      → "print" expression ";" ;
 */
 
 import { Token } from "./token";
@@ -25,8 +34,17 @@ export interface Visitor<R> {
   visitUnaryExpr(expr: Unary): R;
 }
 
+export interface StmtVisitor<R> {
+  visitExpressionStmt(expr: Expression): R;
+  visitPrintStmt(expr: Print): R;
+}
+
 export interface Expr {
   accept<R>(visitor: Visitor<R>): R;
+}
+
+export interface Stmt {
+  accept<R>(visitor: StmtVisitor<R>): R;
 }
 
 export class Binary implements Expr {
@@ -76,5 +94,27 @@ export class Unary implements Expr {
 
   accept<R>(visitor: Visitor<R>) {
     return visitor.visitUnaryExpr(this);
+  }
+}
+
+export class Expression implements Stmt {
+  expression: Expr;
+  constructor(expression: Expr) {
+    this.expression = expression;
+  }
+
+  accept<R>(visitor: StmtVisitor<R>) {
+    return visitor.visitExpressionStmt(this);
+  }
+}
+
+export class Print implements Stmt {
+  expression: Expr;
+  constructor(expression: Expr) {
+    this.expression = expression;
+  }
+
+  accept<R>(visitor: StmtVisitor<R>) {
+    return visitor.visitPrintStmt(this);
   }
 }

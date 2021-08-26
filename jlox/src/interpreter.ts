@@ -12,12 +12,24 @@ code that knows how to evaluate that tree and produce a result
 
 type LoxObject = string | number | boolean | null;
 
-import { Binary, Expr, Grouping, Literal, Unary, Visitor } from "./ast";
+import {
+  Binary,
+  Expr,
+  Expression,
+  Grouping,
+  Literal,
+  Print,
+  Stmt,
+  StmtVisitor,
+  Unary,
+  Visitor,
+} from "./ast";
 import { TokenType, Token } from "./token";
 import { RuntimeError } from "./errors";
 import { Lox } from "./main";
 
-export class Interpreter implements Visitor<LoxObject> {
+export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
+  // statements produce no values. Therefore, the return type is void
   visitLiteralExpr(expr: Literal): LoxObject {
     return expr.value;
   }
@@ -88,18 +100,29 @@ export class Interpreter implements Visitor<LoxObject> {
     return null;
   }
 
-  evaluate(expr: Expr): LoxObject {
+  visitExpressionStmt(stmt: Expression) {
+    this.evaluate(stmt.expression); // discard this value
+    return;
+  }
+
+  visitPrintStmt(stmt: Print) {
+    const value = this.evaluate(stmt.expression);
+    console.log(this.stringify(value));
+    return;
+  }
+
+  private evaluate(expr: Expr): LoxObject {
     return expr.accept(this);
   }
 
-  isTruthy(object: LoxObject) {
+  private isTruthy(object: LoxObject) {
     // only null and false are falsy
     if (object === null) return false;
     if (typeof object === "boolean") return object;
     return true;
   }
 
-  isEqual(a: LoxObject, b: LoxObject): boolean {
+  private isEqual(a: LoxObject, b: LoxObject): boolean {
     if (a === null && b === null) return true;
     if (a === null) return false;
 
@@ -134,12 +157,17 @@ export class Interpreter implements Visitor<LoxObject> {
     return object.toString();
   }
 
-  interpret(expression: Expr) {
+  interpret(statements: Stmt[]) {
     try {
-      const value: LoxObject = this.evaluate(expression);
-      console.log(this.stringify(value));
+      for (const statement of statements) {
+        this.execute(statement);
+      }
     } catch (err) {
       Lox.runtimeError(err);
     }
+  }
+
+  private execute(stmt: Stmt) {
+    stmt.accept(this);
   }
 }

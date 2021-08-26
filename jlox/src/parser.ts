@@ -1,14 +1,30 @@
 /*
-expression -> equality
+program        → statement* EOF ;
+statement      → exprStmt | printStmt ;
+exprStmt       → expression ";" ;
+printStmt      → "print" expression ";" ;
+expression -> equality ;
 equality (== !=) -> comparison ( ("!=" | "==") comparison )* ;
 comparison (< <= > >=) -> term ( ("<" | "<=" | ">" | ">=") term )* ;
 term (- +) -> factor ( ("-" | "+") factor )* ;
 factor (/ *) -> unary ( ("/" | "*") unary )* ;
 unary (! -) -> ("!" | "-") unary | primary;
-primary (Literals or parenthezised expressions) -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
+primary (Literals or parenthesized expressions) -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
+
+
+a program is a list of statements
 */
 
-import { Binary, Expr, Grouping, Literal, Unary } from "./ast";
+import {
+  Binary,
+  Expr,
+  Expression,
+  Grouping,
+  Literal,
+  Print,
+  Stmt,
+  Unary,
+} from "./ast";
 import { TokenType, Token } from "./token";
 import { Lox } from "./main";
 import { ParseError } from "./errors";
@@ -23,12 +39,42 @@ export class Parser {
     this.tokens = tokens;
   }
 
-  parse(): Expr | null {
-    try {
-      return this.expression();
-    } catch (err) {
-      return null;
+  // a program is a list of statements
+  // the program rule
+  // program -> statement* EOF;
+  parse(): Stmt[] {
+    const statements: Stmt[] = [];
+    // EOF
+    while (!this.isAtEnd()) {
+      statements.push(this.statement());
     }
+
+    return statements;
+  }
+
+  // the statement rule
+  // statment -> expression statement | print statement
+  private statement(): Stmt {
+    if (this.match(TokenType.PRINT)) {
+      return this.printStatement(); // if "print" found
+    }
+    return this.expressionStatement();
+  }
+
+  // the print statement rule
+  // printStmt      → "print" expression ";" ;
+  private printStatement(): Stmt {
+    const value = this.expression();
+    this.consume(TokenType.SEMICOLON, "Expect ';' after value.");
+    return new Print(value);
+  }
+
+  // the expression statement rule
+  // exprStmt       → expression ";" ;
+  private expressionStatement(): Stmt {
+    const expr = this.expression();
+    this.consume(TokenType.SEMICOLON, "Expect ';' after expression.");
+    return new Expression(expr);
   }
 
   // the expression grammar rule
@@ -40,12 +86,12 @@ export class Parser {
   // the equality rule
   // equality -> comparison ( ("!=" | "==") comparison )* ;
   private equality(): Expr {
-    let expr: Expr = this.comparsion();
+    let expr: Expr = this.comparison();
 
     while (this.match(TokenType.BANG_EQUAL, TokenType.EQUAL_EQUAL)) {
       // run as long as we get the != or == tokens
       const operator: Token = this.previous();
-      const right: Expr = this.comparsion();
+      const right: Expr = this.comparison();
       expr = new Binary(expr, operator, right);
     }
 
@@ -54,7 +100,7 @@ export class Parser {
 
   // the comparison rule
   // comparison -> term ( ("<" | "<=" | ">" | ">=") term )* ;
-  private comparsion(): Expr {
+  private comparison(): Expr {
     let expr: Expr = this.term();
 
     while (
@@ -114,7 +160,7 @@ export class Parser {
   }
 
   // the primary rule
-  // primary (Literals or parenthezised expressions) -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
+  // primary (Literals or parenthesized expressions) -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
   private primary(): Expr {
     if (this.match(TokenType.TRUE)) return new Literal(true);
     if (this.match(TokenType.FALSE)) return new Literal(false);
@@ -152,7 +198,7 @@ export class Parser {
   }
 
   private check(type: TokenType): boolean {
-    // checks if the currrent token is of the given type
+    // checks if the current token is of the given type
     if (this.isAtEnd()) return false;
     return this.peek().type === type;
   }
