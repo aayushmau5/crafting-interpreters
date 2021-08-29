@@ -1,5 +1,7 @@
 /*
-program        → statement* EOF ;
+program        → declaration* EOF ;
+declaration    → varDecl | statement;
+varDecl        → "var" IDENTIFIER ("=" expression)? ";" ;
 statement      → exprStmt | printStmt ;
 exprStmt       → expression ";" ;
 printStmt      → "print" expression ";" ;
@@ -9,10 +11,25 @@ comparison (< <= > >=) -> term ( ("<" | "<=" | ">" | ">=") term )* ;
 term (- +) -> factor ( ("-" | "+") factor )* ;
 factor (/ *) -> unary ( ("/" | "*") unary )* ;
 unary (! -) -> ("!" | "-") unary | primary;
-primary (Literals or parenthesized expressions) -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
+primary (Literals or parenthesized expressions) -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
 
 
 a program is a list of statements
+
+var message = "hello, world";
+
+-> a new binding that associates a name(message) with a value("hello, world")
+
+variable expression access that binding
+identifier(message) used as an expression
+looks up value bound to that name
+
+Variable declarations are statements
+'var message = "hello, world";' is a statement
+
+block statements
+
+statements that declare names
 */
 
 import {
@@ -24,6 +41,8 @@ import {
   Print,
   Stmt,
   Unary,
+  Var,
+  Variable,
 } from "./ast";
 import { TokenType, Token } from "./token";
 import { Lox } from "./main";
@@ -46,10 +65,34 @@ export class Parser {
     const statements: Stmt[] = [];
     // EOF
     while (!this.isAtEnd()) {
-      statements.push(this.statement());
+      try {
+        statements.push(this.declaration());
+      } catch (error) {
+        this.synchronize();
+      }
     }
 
     return statements;
+  }
+
+  // the declaration rule
+  // declaration    → varDecl | statement;
+  private declaration(): Stmt {
+    if (this.match(TokenType.VAR)) {
+      return this.varDeclaration();
+    }
+    return this.statement();
+  }
+
+  private varDeclaration(): Stmt {
+    const name = this.consume(TokenType.IDENTIFIER, "Expect variable name.");
+    let initializer: Expr | null = null;
+    if (this.match(TokenType.EQUAL)) {
+      initializer = this.expression();
+    }
+
+    this.consume(TokenType.SEMICOLON, "Expect ';' after variable declaration.");
+    return new Var(name, initializer);
   }
 
   // the statement rule
@@ -168,6 +211,10 @@ export class Parser {
 
     if (this.match(TokenType.STRING, TokenType.NUMBER)) {
       return new Literal(this.previous().literal);
+    }
+
+    if (this.match(TokenType.IDENTIFIER)) {
+      return new Variable(this.previous());
     }
 
     if (this.match(TokenType.LEFT_PAREN)) {

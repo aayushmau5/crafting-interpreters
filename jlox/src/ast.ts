@@ -32,11 +32,13 @@ export interface Visitor<R> {
   visitGroupingExpr(expr: Grouping): R;
   visitLiteralExpr(expr: Literal): R;
   visitUnaryExpr(expr: Unary): R;
+  visitVariableExpr(expr: Variable): R;
 }
 
 export interface StmtVisitor<R> {
   visitExpressionStmt(expr: Expression): R;
   visitPrintStmt(expr: Print): R;
+  visitVarStmt(expr: Var): R;
 }
 
 export interface Expr {
@@ -116,5 +118,33 @@ export class Print implements Stmt {
 
   accept<R>(visitor: StmtVisitor<R>) {
     return visitor.visitPrintStmt(this);
+  }
+}
+
+export class Var implements Stmt {
+  // declaraing a variable is a statement. ex. var a = "a";
+  // for declaring a variable
+  name: Token;
+  initializer: Expr | null; // default value will be null
+  constructor(name: Token, initializer: Expr | null = null) {
+    this.name = name;
+    this.initializer = initializer;
+  }
+
+  accept<R>(visitor: StmtVisitor<R>) {
+    return visitor.visitVarStmt(this);
+  }
+}
+
+export class Variable implements Expr {
+  // accessing a variable is an expression. ex. a + "b";
+  // for accessing a variable
+  name: Token;
+  constructor(name: Token) {
+    this.name = name;
+  }
+
+  accept<R>(visitor: Visitor<R>) {
+    return visitor.visitVariableExpr(this);
   }
 }

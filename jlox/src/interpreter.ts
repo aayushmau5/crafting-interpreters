@@ -10,8 +10,6 @@ code that knows how to evaluate that tree and produce a result
 1. what kinds of values do we produce?
 */
 
-type LoxObject = string | number | boolean | null;
-
 import {
   Binary,
   Expr,
@@ -22,14 +20,21 @@ import {
   Stmt,
   StmtVisitor,
   Unary,
+  Var,
+  Variable,
   Visitor,
 } from "./ast";
 import { TokenType, Token } from "./token";
 import { RuntimeError } from "./errors";
 import { Lox } from "./main";
+import { Environment } from "./environment";
+import { LoxObject } from "./types";
 
 export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
   // statements produce no values. Therefore, the return type is void
+
+  environment: Environment = new Environment();
+
   visitLiteralExpr(expr: Literal): LoxObject {
     return expr.value;
   }
@@ -111,6 +116,18 @@ export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
     return;
   }
 
+  visitVarStmt(stmt: Var) {
+    let value = null;
+    if (stmt.initializer !== null) {
+      value = this.evaluate(stmt.initializer);
+    }
+    this.environment.define(stmt.name.lexeme, value);
+  }
+
+  visitVariableExpr(expr: Variable) {
+    return this.environment.get(expr.name);
+  }
+
   private evaluate(expr: Expr): LoxObject {
     return expr.accept(this);
   }
@@ -163,7 +180,7 @@ export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
         this.execute(statement);
       }
     } catch (err) {
-      Lox.runtimeError(err);
+      Lox.runtimeError(err as RuntimeError);
     }
   }
 
