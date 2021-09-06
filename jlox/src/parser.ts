@@ -2,7 +2,8 @@
 program        → declaration* EOF ;
 declaration    → varDecl | statement;
 varDecl        → "var" IDENTIFIER ("=" expression)? ";" ;
-statement      → exprStmt | printStmt ;
+statement      → exprStmt | printStmt | block ;
+block          → "{" declaration* "}" ;
 exprStmt       → expression ";" ;
 printStmt      → "print" expression ";" ;
 expression -> equality ;
@@ -30,10 +31,17 @@ Variable declarations are statements
 block statements
 
 statements that declare names
+
+In some other languages,  like pascal, python and Go, assignment is a statment.
+But in some other languages, assignment is an expression.
+
+For lox, assignment is an expression.
 */
 
 import {
+  Assign,
   Binary,
+  Block,
   Expr,
   Expression,
   Grouping,
@@ -101,7 +109,22 @@ export class Parser {
     if (this.match(TokenType.PRINT)) {
       return this.printStatement(); // if "print" found
     }
+    if (this.match(TokenType.LEFT_BRACE)) {
+      // if "{" found, start of a block statement
+      return new Block(this.block());
+    }
     return this.expressionStatement();
+  }
+
+  // the block statment rule
+  // block          → "{" declaration* "}" ;
+  private block(): Stmt[] {
+    const statements: Stmt[] = [];
+    while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
+      statements.push(this.declaration());
+    }
+    this.consume(TokenType.RIGHT_BRACE, "Expect '}' after block.");
+    return statements;
   }
 
   // the print statement rule
@@ -123,7 +146,23 @@ export class Parser {
   // the expression grammar rule
   // expression -> equality
   private expression() {
-    return this.equality(); // calls the equality rule
+    return this.assignment(); // calls the assignment rule
+  }
+
+  private assignment(): Expr {
+    const expr = this.equality(); // r-value expression
+    if (this.match(TokenType.EQUAL)) {
+      const equals = this.previous();
+      const value = this.assignment();
+
+      if (expr instanceof Variable) {
+        const name = expr.name;
+        return new Assign(name, value); // l-value representation
+      }
+
+      this.error(equals, "Invalid assignment target.");
+    }
+    return expr;
   }
 
   // the equality rule

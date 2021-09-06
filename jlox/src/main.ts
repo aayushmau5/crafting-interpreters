@@ -65,15 +65,16 @@ export class Lox {
   static run(source: string) {
     const scanner = new Scanner(source);
     const tokens = scanner.scanTokens();
-    // console.log(inspect(tokens, false, null, true));
+    console.log("tokens");
+    console.log(inspect(tokens, false, null, true));
     const parser = new Parser(tokens);
     const statments = parser.parse();
 
     if (this.hadError) return;
 
-    // console.log(inspect(statments, false, null, true));
+    console.log("ast");
+    console.log(inspect(statments, false, null, true));
 
-    // console.log(new AstPrinter().print(expression));
     this.interpreter.interpret(statments);
   }
 

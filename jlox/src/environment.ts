@@ -11,17 +11,39 @@ import { Token } from "./token";
 import { LoxObject } from "./types";
 
 export class Environment {
-  value: Map<string, LoxObject> = new Map();
+  enclosing: Environment | null; // each environment has a reference to its enclosing environment
+  values: Map<string, LoxObject> = new Map();
+
+  constructor(enclosing?: Environment) {
+    // enclosing = undefined is for global scope's environment
+    this.enclosing = enclosing || null;
+  }
 
   get(name: Token): LoxObject {
-    if (this.value.has(name.lexeme)) {
-      return this.value.get(name.lexeme) as LoxObject;
+    if (this.values.has(name.lexeme)) {
+      return this.values.get(name.lexeme) as LoxObject;
     }
+
+    if (this.enclosing !== null) return this.enclosing.get(name);
 
     throw new RuntimeError(name, `Undefined variable ${name.lexeme}.`);
   }
 
   define(name: string, value: LoxObject): void {
-    this.value.set(name, value);
+    this.values.set(name, value);
+  }
+
+  assign(name: Token, value: LoxObject) {
+    if (this.values.has(name.lexeme)) {
+      this.values.set(name.lexeme, value);
+      return;
+    }
+
+    if (this.enclosing !== null) {
+      this.enclosing.assign(name, value);
+      return;
+    }
+
+    throw new RuntimeError(name, `Undefined variable ${name.lexeme}`);
   }
 }

@@ -1,6 +1,7 @@
 /*
 ----- Lowest Precedence ----
-expression -> equality (same as equality and all below)
+expression -> assignment ;
+assignment -> IDENTIFIER "=" assignment | equality ;
 equality (== !=) -> comparison ( ("!=" | "==") comparison )* ;
 comparison (< <= > >=) -> term ( ("<" | "<=" | ">" | ">=") term )* ;
 term (- +) -> factor ( ("-" | "+") factor )* ;
@@ -33,12 +34,14 @@ export interface Visitor<R> {
   visitLiteralExpr(expr: Literal): R;
   visitUnaryExpr(expr: Unary): R;
   visitVariableExpr(expr: Variable): R;
+  visitAssignExpr(expr: Assign): R;
 }
 
 export interface StmtVisitor<R> {
   visitExpressionStmt(expr: Expression): R;
   visitPrintStmt(expr: Print): R;
   visitVarStmt(expr: Var): R;
+  visitBlockStmt(expr: Block): R;
 }
 
 export interface Expr {
@@ -146,5 +149,31 @@ export class Variable implements Expr {
 
   accept<R>(visitor: Visitor<R>) {
     return visitor.visitVariableExpr(this);
+  }
+}
+
+export class Assign implements Expr {
+  // for assignment. ex. a = "a";
+  name: Token;
+  value: Expr;
+
+  constructor(name: Token, value: Expr) {
+    this.name = name;
+    this.value = value;
+  }
+
+  accept<R>(visitor: Visitor<R>) {
+    return visitor.visitAssignExpr(this);
+  }
+}
+
+export class Block implements Stmt {
+  statements: Stmt[]; // list of statements that are inside the block
+  constructor(statements: Stmt[]) {
+    this.statements = statements;
+  }
+
+  accept<R>(visitor: StmtVisitor<R>) {
+    return visitor.visitBlockStmt(this);
   }
 }

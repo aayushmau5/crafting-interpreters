@@ -8,10 +8,28 @@ Now, it's time to evaluate that AST(or expression) and produce a value
 code that knows how to evaluate that tree and produce a result
 
 1. what kinds of values do we produce?
+
+Scope
+
+Lexical Scope(aka static scope) is a specific style of scoping where the text
+of the program itself shows where a scope begins and ends.
+
+Variables are lexically scoped.
+
+Methods and fields on objects are dynamically scoped(at runtime).
+
+Scope and environments are close cousins.
+The former is the theoretical concept, and the latter is the machinery that implements it.
+
+For lox, scopes are controlled by {}(block scope).
+
+parent-pointer tree
 */
 
 import {
+  Assign,
   Binary,
+  Block,
   Expr,
   Expression,
   Grouping,
@@ -124,8 +142,18 @@ export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
     this.environment.define(stmt.name.lexeme, value);
   }
 
+  visitAssignExpr(expr: Assign) {
+    const value = this.evaluate(expr.value);
+    this.environment.assign(expr.name, value);
+    return value;
+  }
+
   visitVariableExpr(expr: Variable) {
     return this.environment.get(expr.name);
+  }
+
+  visitBlockStmt(stmt: Block) {
+    this.executeBlock(stmt.statements, new Environment(this.environment));
   }
 
   private evaluate(expr: Expr): LoxObject {
@@ -186,5 +214,18 @@ export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
 
   private execute(stmt: Stmt) {
     stmt.accept(this);
+  }
+
+  private executeBlock(statements: Stmt[], environment: Environment) {
+    const previous = this.environment;
+    try {
+      this.environment = environment;
+
+      for (const statement of statements) {
+        this.execute(statement);
+      }
+    } finally {
+      this.environment = previous;
+    }
   }
 }
