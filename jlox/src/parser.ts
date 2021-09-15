@@ -2,7 +2,10 @@
 program        → declaration* EOF ;
 declaration    → varDecl | statement;
 varDecl        → "var" IDENTIFIER ("=" expression)? ";" ;
-statement      → exprStmt | printStmt | block ;
+statement      → exprStmt | forStmt | ifStmt | printStmt | whileStmt | block ;
+forStmt        → "for" "(" ( varDecl | exprStmt | ";" ) expression? ";" expression? ")" statement;
+whileStmt      → "while" "(" expression ")" statement ;
+ifStmt         → "if" "(" expression ")" statement ( "else" statement )? ;
 block          → "{" declaration* "}" ;
 exprStmt       → expression ";" ;
 printStmt      → "print" expression ";" ;
@@ -36,6 +39,20 @@ In some other languages,  like pascal, python and Go, assignment is a statment.
 But in some other languages, assignment is an expression.
 
 For lox, assignment is an expression.
+
+Conditional execution or Control flow
+
+Control flow(two types):
+1. Conditional or branching control flow
+2. Looping control flow
+
+Branching control flow using `if` and `?:`
+An `if` statement lets you conditionally execute statemensts
+and the conditional operators lets you conditionally execute expressions.
+
+The `else` is bound to the nearest `if` that precedes(to happen before something) it.
+
+The logical operators: `and` and `or` are technically control flow constructs.
 */
 
 import {
@@ -45,12 +62,15 @@ import {
   Expr,
   Expression,
   Grouping,
+  If,
   Literal,
+  Logical,
   Print,
   Stmt,
   Unary,
   Var,
   Variable,
+  While,
 } from "./ast";
 import { TokenType, Token } from "./token";
 import { Lox } from "./main";
@@ -106,6 +126,16 @@ export class Parser {
   // the statement rule
   // statment -> expression statement | print statement
   private statement(): Stmt {
+    if (this.match(TokenType.FOR)) {
+      return this.forStatement(); // if "for" found
+    }
+    if (this.match(TokenType.IF)) {
+      return this.ifStatement(); // if "if" found
+    }
+    if (this.match(TokenType.WHILE)) {
+      // if "while" found
+      return this.whileStatement();
+    }
     if (this.match(TokenType.PRINT)) {
       return this.printStatement(); // if "print" found
     }
@@ -114,6 +144,71 @@ export class Parser {
       return new Block(this.block());
     }
     return this.expressionStatement();
+  }
+
+  // the for statement rule
+  // forStmt        → "for" "(" ( varDecl | exprStmt | ";" ) expression? ";" expression? ")" statement;
+  private forStatement() {
+    this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'for'.");
+    let initializer: Stmt | null;
+    if (this.match(TokenType.SEMICOLON)) {
+      initializer = null;
+    } else if (this.match(TokenType.VAR)) {
+      initializer = this.varDeclaration();
+    } else {
+      initializer = this.expressionStatement();
+    }
+    let condition: Expr | null = null;
+    if (!this.check(TokenType.SEMICOLON)) {
+      condition = this.expression();
+    }
+    this.consume(TokenType.SEMICOLON, "Expect ';' after loop condition.");
+    let increment: Expr | null = null;
+    if (!this.check(TokenType.SEMICOLON)) {
+      increment = this.expression();
+    }
+    this.consume(TokenType.RIGHT_PAREN, "Expect ')' after for clauses.");
+    let body = this.statement();
+
+    if (increment !== null) {
+      body = new Block([body, new Expression(increment)]);
+    }
+
+    if (condition === null) {
+      condition = new Literal(true);
+    }
+    body = new While(condition, body);
+
+    if (initializer !== null) {
+      body = new Block([initializer, body]);
+    }
+
+    return body;
+  }
+
+  // the if statment rule
+  // ifStmt         → "if" "(" expression ")" statement ( "else" statement )? ;
+  // already handles the danling else problem
+  private ifStatement() {
+    this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'.");
+    const condition = this.expression();
+    this.consume(TokenType.RIGHT_PAREN, "Expect ')' after if condition.");
+    const thenBranch = this.statement();
+    let elseBranch = null;
+    if (this.match(TokenType.ELSE)) {
+      elseBranch = this.statement();
+    }
+    return new If(condition, thenBranch, elseBranch);
+  }
+
+  // the while statement rule
+  // whileStmt      → "while" "(" expression ")" statement ;
+  private whileStatement() {
+    this.consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.");
+    const condition = this.expression();
+    this.consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.");
+    const body = this.statement();
+    return new While(condition, body);
   }
 
   // the block statment rule
@@ -150,7 +245,7 @@ export class Parser {
   }
 
   private assignment(): Expr {
-    const expr = this.equality(); // r-value expression
+    const expr = this.or();
     if (this.match(TokenType.EQUAL)) {
       const equals = this.previous();
       const value = this.assignment();
@@ -161,6 +256,26 @@ export class Parser {
       }
 
       this.error(equals, "Invalid assignment target.");
+    }
+    return expr;
+  }
+
+  private or(): Expr {
+    let expr = this.and();
+    while (this.match(TokenType.OR)) {
+      const operator = this.previous();
+      const right = this.and();
+      expr = new Logical(expr, operator, right);
+    }
+    return expr;
+  }
+
+  private and(): Expr {
+    let expr = this.equality();
+    while (this.match(TokenType.AND)) {
+      const operator = this.previous();
+      const right = this.equality();
+      expr = new Logical(expr, operator, right);
     }
     return expr;
   }

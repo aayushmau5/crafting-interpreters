@@ -1,7 +1,9 @@
 /*
 ----- Lowest Precedence ----
 expression -> assignment ;
-assignment -> IDENTIFIER "=" assignment | equality ;
+assignment -> IDENTIFIER "=" assignment | logic_or ;
+logic_or -> logic_and ( "or" logic_and )* ;
+logic_and -> equality ( "and" equality )* ;
 equality (== !=) -> comparison ( ("!=" | "==") comparison )* ;
 comparison (< <= > >=) -> term ( ("<" | "<=" | ">" | ">=") term )* ;
 term (- +) -> factor ( ("-" | "+") factor )* ;
@@ -35,6 +37,7 @@ export interface Visitor<R> {
   visitUnaryExpr(expr: Unary): R;
   visitVariableExpr(expr: Variable): R;
   visitAssignExpr(expr: Assign): R;
+  visitLogicalExpr(expr: Logical): R;
 }
 
 export interface StmtVisitor<R> {
@@ -42,6 +45,8 @@ export interface StmtVisitor<R> {
   visitPrintStmt(expr: Print): R;
   visitVarStmt(expr: Var): R;
   visitBlockStmt(expr: Block): R;
+  visitIfStmt(expr: If): R;
+  visitWhileStmt(expr: While): R;
 }
 
 export interface Expr {
@@ -89,6 +94,21 @@ export class Literal implements Expr {
   }
 }
 
+export class Logical implements Expr {
+  left: Expr;
+  operator: Token; // "and" or "or"
+  right: Expr;
+  constructor(left: Expr, operator: Token, right: Expr) {
+    this.left = left;
+    this.operator = operator;
+    this.right = right;
+  }
+
+  accept<R>(v: Visitor<R>) {
+    return v.visitLogicalExpr(this);
+  }
+}
+
 export class Unary implements Expr {
   operator: Token;
   right: Expr;
@@ -110,6 +130,33 @@ export class Expression implements Stmt {
 
   accept<R>(visitor: StmtVisitor<R>) {
     return visitor.visitExpressionStmt(this);
+  }
+}
+
+export class If implements Stmt {
+  condition: Expr;
+  thenBranch: Stmt;
+  elseBranch: Stmt | null;
+  constructor(condition: Expr, thenBranch: Stmt, elseBranch: Stmt | null) {
+    this.condition = condition;
+    this.thenBranch = thenBranch;
+    this.elseBranch = elseBranch;
+  }
+
+  accept<R>(v: StmtVisitor<R>) {
+    return v.visitIfStmt(this);
+  }
+}
+
+export class While implements Stmt {
+  condition: Expr;
+  body: Stmt;
+  constructor(condition: Expr, body: Stmt) {
+    this.condition = condition;
+    this.body = body;
+  }
+  accept<R>(v: StmtVisitor<R>) {
+    return v.visitWhileStmt(this);
   }
 }
 

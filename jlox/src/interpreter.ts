@@ -33,7 +33,9 @@ import {
   Expr,
   Expression,
   Grouping,
+  If,
   Literal,
+  Logical,
   Print,
   Stmt,
   StmtVisitor,
@@ -41,6 +43,7 @@ import {
   Var,
   Variable,
   Visitor,
+  While,
 } from "./ast";
 import { TokenType, Token } from "./token";
 import { RuntimeError } from "./errors";
@@ -55,6 +58,20 @@ export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
 
   visitLiteralExpr(expr: Literal): LoxObject {
     return expr.value;
+  }
+
+  visitLogicalExpr(expr: Logical): LoxObject {
+    const left = this.evaluate(expr.left);
+    if (expr.operator.type === TokenType.OR) {
+      if (this.isTruthy(left)) {
+        return left;
+      }
+    } else {
+      if (!this.isTruthy(left)) {
+        return left;
+      }
+    }
+    return this.evaluate(expr.right); // return the value itself
   }
 
   visitGroupingExpr(expr: Grouping): LoxObject {
@@ -125,6 +142,22 @@ export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
 
   visitExpressionStmt(stmt: Expression) {
     this.evaluate(stmt.expression); // discard this value
+    return;
+  }
+
+  visitIfStmt(stmt: If) {
+    if (this.isTruthy(this.evaluate(stmt.condition))) {
+      this.execute(stmt.thenBranch);
+    } else if (stmt.elseBranch !== null) {
+      this.execute(stmt.elseBranch);
+    }
+    return;
+  }
+
+  visitWhileStmt(stmt: While) {
+    while (this.isTruthy(this.evaluate(stmt.condition))) {
+      this.execute(stmt.body);
+    }
     return;
   }
 
