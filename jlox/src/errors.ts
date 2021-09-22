@@ -1,4 +1,5 @@
 import { Token } from "./token";
+import { LoxObject } from "./types";
 
 export class SyntaxError extends Error {
   name = "SyntaxError";

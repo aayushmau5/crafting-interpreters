@@ -1,22 +1,27 @@
 /*
 program        → declaration* EOF ;
-declaration    → varDecl | statement;
+declaration    → funcDecl | varDecl | statement;
+funcDecl       → "fun" function;
+function       → IDENTIFIER "(" parameters? ")" block ;
+parameters     → IDENTIFIER ( "," IDENTIFIER )* ;
 varDecl        → "var" IDENTIFIER ("=" expression)? ";" ;
-statement      → exprStmt | forStmt | ifStmt | printStmt | whileStmt | block ;
+statement      → exprStmt | forStmt | ifStmt | printStmt | returnStmt | whileStmt | block ;
+returnStmt     → "return" expression? ";" ;
 forStmt        → "for" "(" ( varDecl | exprStmt | ";" ) expression? ";" expression? ")" statement;
 whileStmt      → "while" "(" expression ")" statement ;
 ifStmt         → "if" "(" expression ")" statement ( "else" statement )? ;
 block          → "{" declaration* "}" ;
 exprStmt       → expression ";" ;
 printStmt      → "print" expression ";" ;
-expression -> equality ;
-equality (== !=) -> comparison ( ("!=" | "==") comparison )* ;
-comparison (< <= > >=) -> term ( ("<" | "<=" | ">" | ">=") term )* ;
-term (- +) -> factor ( ("-" | "+") factor )* ;
-factor (/ *) -> unary ( ("/" | "*") unary )* ;
-unary (! -) -> ("!" | "-") unary | primary;
-primary (Literals or parenthesized expressions) -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
-
+expression     → equality ;
+equality (== !=) → comparison ( ("!=" | "==") comparison )* ;
+comparison (< <= > >=) → term ( ("<" | "<=" | ">" | ">=") term )* ;
+term (- +)     → factor ( ("-" | "+") factor )* ;
+factor (/ *)   → unary ( ("/" | "*") unary )* ;
+unary (! -)    → ("!" | "-") unary | call ;
+call           → primary ( "(" arguments? ")" )* ;
+arguments      → expression ( "," expression )* ;
+primary (Literals or parenthesized expressions) → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
 
 a program is a list of statements
 
@@ -59,13 +64,16 @@ import {
   Assign,
   Binary,
   Block,
+  Call,
   Expr,
   Expression,
+  Function,
   Grouping,
   If,
   Literal,
   Logical,
   Print,
+  Return,
   Stmt,
   Unary,
   Var,
@@ -109,7 +117,30 @@ export class Parser {
     if (this.match(TokenType.VAR)) {
       return this.varDeclaration();
     }
+    if (this.match(TokenType.FUN)) {
+      return this.functionDeclaration("function");
+    }
     return this.statement();
+  }
+
+  private functionDeclaration(kind: string): Stmt {
+    const name = this.consume(TokenType.IDENTIFIER, `Expect ${kind} name.`);
+    this.consume(TokenType.LEFT_PAREN, `Expect '(' after ${kind} name.`);
+    const parameters = [];
+    if (!this.check(TokenType.RIGHT_PAREN)) {
+      do {
+        if (parameters.length >= 255) {
+          this.error(this.peek(), "Can't have more than 255 parameters.");
+        }
+        parameters.push(
+          this.consume(TokenType.IDENTIFIER, "Expect parameter name.")
+        );
+      } while (this.match(TokenType.COMMA));
+    }
+    this.consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.");
+    this.consume(TokenType.LEFT_BRACE, `Expect '{' before ${kind} body.`);
+    const body = this.block();
+    return new Function(name, parameters, body);
   }
 
   private varDeclaration(): Stmt {
@@ -139,11 +170,22 @@ export class Parser {
     if (this.match(TokenType.PRINT)) {
       return this.printStatement(); // if "print" found
     }
+    if (this.match(TokenType.RETURN)) return this.returnStatement();
     if (this.match(TokenType.LEFT_BRACE)) {
       // if "{" found, start of a block statement
       return new Block(this.block());
     }
     return this.expressionStatement();
+  }
+
+  returnStatement(): Stmt {
+    const token = this.previous();
+    let value = null;
+    if (!this.check(TokenType.SEMICOLON)) {
+      value = this.expression();
+    }
+    this.consume(TokenType.SEMICOLON, "Expect ';' after return value.");
+    return new Return(token, value);
   }
 
   // the for statement rule
@@ -353,7 +395,20 @@ export class Parser {
       return new Unary(operator, right);
     }
 
-    return this.primary();
+    return this.call();
+  }
+
+  private call(): Expr {
+    let expr = this.primary();
+    while (true) {
+      if (this.match(TokenType.LEFT_PAREN)) {
+        expr = this.finishCall(expr);
+      } else {
+        break;
+      }
+    }
+
+    return expr;
   }
 
   // the primary rule
@@ -378,6 +433,25 @@ export class Parser {
     }
 
     throw this.error(this.peek(), "Expect expression.");
+  }
+
+  private finishCall(callee: Expr): Expr {
+    const args = [];
+
+    if (!this.check(TokenType.RIGHT_PAREN)) {
+      do {
+        if (args.length >= 255) {
+          this.error(this.peek(), "Can't have more than 255 arguments.");
+        }
+        args.push(this.expression());
+      } while (this.match(TokenType.COMMA));
+    }
+
+    const leftParen = this.consume(
+      TokenType.RIGHT_PAREN,
+      "Expect ')' after arguments."
+    );
+    return new Call(callee, leftParen, args);
   }
 
   private consume(type: TokenType, message: string): Token {

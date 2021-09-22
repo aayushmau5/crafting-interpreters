@@ -8,7 +8,9 @@ equality (== !=) -> comparison ( ("!=" | "==") comparison )* ;
 comparison (< <= > >=) -> term ( ("<" | "<=" | ">" | ">=") term )* ;
 term (- +) -> factor ( ("-" | "+") factor )* ;
 factor (/ *) -> unary ( ("/" | "*") unary )* ;
-unary (! -) -> ("!" | "-") unary | primary;
+unary (! -) -> ("!" | "-") unary | call ;
+call -> primary ( "(" arguments? ")" )* ;
+arguments      → expression ( "," expression )* ;
 primary (Literals or parenthezised expressions) -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
 ----- Highest Precedence ----
 
@@ -38,6 +40,7 @@ export interface Visitor<R> {
   visitVariableExpr(expr: Variable): R;
   visitAssignExpr(expr: Assign): R;
   visitLogicalExpr(expr: Logical): R;
+  visitCallExpr(expr: Call): R;
 }
 
 export interface StmtVisitor<R> {
@@ -47,6 +50,8 @@ export interface StmtVisitor<R> {
   visitBlockStmt(expr: Block): R;
   visitIfStmt(expr: If): R;
   visitWhileStmt(expr: While): R;
+  visitFunctionStmt(expr: Function): R;
+  visitReturnStmt(expr: Return): R;
 }
 
 export interface Expr {
@@ -69,6 +74,21 @@ export class Binary implements Expr {
 
   accept<R>(visitor: Visitor<R>) {
     return visitor.visitBinaryExpr(this);
+  }
+}
+
+export class Call implements Expr {
+  callee: Expr;
+  paren: Token; // for closing parenthesis. This token's location will be used to report runtime error location caused by a function call
+  args: Expr[];
+  constructor(callee: Expr, paren: Token, args: Expr[]) {
+    this.callee = callee;
+    this.paren = paren;
+    this.args = args;
+  }
+
+  accept<R>(v: Visitor<R>) {
+    return v.visitCallExpr(this);
   }
 }
 
@@ -133,6 +153,21 @@ export class Expression implements Stmt {
   }
 }
 
+export class Function implements Stmt {
+  name: Token;
+  params: Token[];
+  body: Stmt[];
+  constructor(name: Token, params: Token[], body: Stmt[]) {
+    this.name = name;
+    this.params = params;
+    this.body = body;
+  }
+
+  accept<R>(v: StmtVisitor<R>) {
+    return v.visitFunctionStmt(this);
+  }
+}
+
 export class If implements Stmt {
   condition: Expr;
   thenBranch: Stmt;
@@ -168,6 +203,14 @@ export class Print implements Stmt {
 
   accept<R>(visitor: StmtVisitor<R>) {
     return visitor.visitPrintStmt(this);
+  }
+}
+
+export class Return implements Stmt {
+  constructor(public keyword: Token, public value: Expr | null) {}
+
+  accept<R>(v: StmtVisitor<R>) {
+    return v.visitReturnStmt(this);
   }
 }
 

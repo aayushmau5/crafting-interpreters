@@ -30,13 +30,16 @@ import {
   Assign,
   Binary,
   Block,
+  Call,
   Expr,
   Expression,
+  Function,
   Grouping,
   If,
   Literal,
   Logical,
   Print,
+  Return,
   Stmt,
   StmtVisitor,
   Unary,
@@ -49,12 +52,30 @@ import { TokenType, Token } from "./token";
 import { RuntimeError } from "./errors";
 import { Lox } from "./main";
 import { Environment } from "./environment";
-import { LoxObject } from "./types";
+import { LoxCallable, LoxFunction, LoxObject } from "./types";
+
+class Clock extends LoxCallable {
+  arity() {
+    return 0;
+  }
+
+  call(_interpreter: Interpreter, _args: LoxObject[]) {
+    return Date.now() / 1000;
+  }
+
+  toString() {
+    return "<native fn 'clock'>";
+  }
+}
 
 export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
   // statements produce no values. Therefore, the return type is void
+  globals: Environment = new Environment(); // holds a fixed reference to the outermost global environment
+  environment: Environment = this.globals;
 
-  environment: Environment = new Environment();
+  constructor() {
+    this.globals.define("clock", new Clock()); // the native clock function
+  }
 
   visitLiteralExpr(expr: Literal): LoxObject {
     return expr.value;
@@ -189,6 +210,44 @@ export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
     this.executeBlock(stmt.statements, new Environment(this.environment));
   }
 
+  visitCallExpr(expr: Call) {
+    const callee = this.evaluate(expr.callee);
+
+    const args = [];
+    for (const arg of expr.args) {
+      args.push(this.evaluate(arg));
+    }
+
+    if (!(callee instanceof LoxCallable)) {
+      throw new RuntimeError(
+        expr.paren,
+        "Can only call functions and classes."
+      );
+    }
+
+    const func = callee as LoxCallable;
+    if (args.length !== func.arity()) {
+      throw new RuntimeError(
+        expr.paren,
+        `Expect ${func.arity()} arguments but got ${args.length}.`
+      );
+    }
+    return func.call(this, args);
+  }
+
+  visitFunctionStmt(stmt: Function) {
+    const func = new LoxFunction(stmt, this.environment);
+    this.environment.define(stmt.name.lexeme, func);
+    return;
+  }
+
+  visitReturnStmt(stmt: Return) {
+    let value = null;
+    if (stmt.value != null) value = this.evaluate(stmt.value);
+
+    throw new LoxFunction.Return(value);
+  }
+
   private evaluate(expr: Expr): LoxObject {
     return expr.accept(this);
   }
@@ -245,11 +304,11 @@ export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
     }
   }
 
-  private execute(stmt: Stmt) {
-    stmt.accept(this);
+  execute(stmt: Stmt) {
+    return stmt.accept(this);
   }
 
-  private executeBlock(statements: Stmt[], environment: Environment) {
+  executeBlock(statements: Stmt[], environment: Environment) {
     const previous = this.environment;
     try {
       this.environment = environment;
