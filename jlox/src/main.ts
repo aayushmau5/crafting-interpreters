@@ -8,6 +8,7 @@ import { RuntimeError, SyntaxError } from "./errors";
 import { Token, TokenType } from "./token";
 import { Parser } from "./parser";
 import { Interpreter } from "./interpreter";
+import { Resolver } from "./resolver";
 
 export class Lox {
   private static interpreter = new Interpreter();
@@ -69,6 +70,11 @@ export class Lox {
     console.log(inspect(tokens, false, null, true));
     const parser = new Parser(tokens);
     const statments = parser.parse();
+
+    if (this.hadError) return;
+
+    const resolver = new Resolver(this.interpreter);
+    resolver.resolve(statments);
 
     if (this.hadError) return;
 

@@ -29,6 +29,14 @@ export class Environment {
     throw new RuntimeError(name, `Undefined variable ${name.lexeme}.`);
   }
 
+  getAt(distance: number, name: string) {
+    return this.ancestor(distance).values.get(name);
+  }
+
+  assignAt(distance: number, name: Token, value: LoxObject) {
+    this.ancestor(distance).values.set(name.lexeme, value);
+  }
+
   define(name: string, value: LoxObject): void {
     this.values.set(name, value);
   }
@@ -45,5 +53,14 @@ export class Environment {
     }
 
     throw new RuntimeError(name, `Undefined variable ${name.lexeme}`);
+  }
+
+  ancestor(distance: number): Environment {
+    let environment = this as Environment;
+    for (let i = 0; i < distance; i++) {
+      environment = environment.enclosing as Environment;
+    }
+
+    return environment;
   }
 }

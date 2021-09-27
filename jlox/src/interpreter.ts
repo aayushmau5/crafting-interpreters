@@ -72,6 +72,7 @@ export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
   // statements produce no values. Therefore, the return type is void
   globals: Environment = new Environment(); // holds a fixed reference to the outermost global environment
   environment: Environment = this.globals;
+  locals = new Map<Expr, number>();
 
   constructor() {
     this.globals.define("clock", new Clock()); // the native clock function
@@ -198,12 +199,18 @@ export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
 
   visitAssignExpr(expr: Assign) {
     const value = this.evaluate(expr.value);
+    const distance = this.locals.get(expr);
+    if (distance !== undefined) {
+      this.environment.assignAt(distance, expr.name, value);
+    } else {
+      this.globals.assign(expr.name, value);
+    }
     this.environment.assign(expr.name, value);
     return value;
   }
 
   visitVariableExpr(expr: Variable) {
-    return this.environment.get(expr.name);
+    return this.lookupVariable(expr.name, expr);
   }
 
   visitBlockStmt(stmt: Block) {
@@ -318,6 +325,19 @@ export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
       }
     } finally {
       this.environment = previous;
+    }
+  }
+
+  resolve(expr: Expr, depth: number) {
+    this.locals.set(expr, depth);
+  }
+
+  lookupVariable(name: Token, expr: Expr): LoxObject {
+    const distance = this.locals.get(expr);
+    if (distance !== undefined) {
+      return this.environment.getAt(distance, name.lexeme) as LoxObject;
+    } else {
+      return this.globals.get(name);
     }
   }
 }
