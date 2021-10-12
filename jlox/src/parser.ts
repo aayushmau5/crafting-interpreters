@@ -1,6 +1,7 @@
 /*
 program        → declaration* EOF ;
-declaration    → funcDecl | varDecl | statement;
+declaration    → classDecl | funcDecl | varDecl | statement ;
+classDecl      → "class" IDENTIFIER "{" function* "}" ;
 funcDecl       → "fun" function;
 function       → IDENTIFIER "(" parameters? ")" block ;
 parameters     → IDENTIFIER ( "," IDENTIFIER )* ;
@@ -19,7 +20,7 @@ comparison (< <= > >=) → term ( ("<" | "<=" | ">" | ">=") term )* ;
 term (- +)     → factor ( ("-" | "+") factor )* ;
 factor (/ *)   → unary ( ("/" | "*") unary )* ;
 unary (! -)    → ("!" | "-") unary | call ;
-call           → primary ( "(" arguments? ")" )* ;
+call           → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
 arguments      → expression ( "," expression )* ;
 primary (Literals or parenthesized expressions) → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
 
@@ -58,6 +59,8 @@ and the conditional operators lets you conditionally execute expressions.
 The `else` is bound to the nearest `if` that precedes(to happen before something) it.
 
 The logical operators: `and` and `or` are technically control flow constructs.
+
+Property access("get expressions")
 */
 
 import {
@@ -65,16 +68,20 @@ import {
   Binary,
   Block,
   Call,
+  Class,
   Expr,
   Expression,
   Function,
+  Get,
   Grouping,
   If,
   Literal,
   Logical,
   Print,
   Return,
+  Set,
   Stmt,
+  This,
   Unary,
   Var,
   Variable,
@@ -114,6 +121,9 @@ export class Parser {
   // the declaration rule
   // declaration    → varDecl | statement;
   private declaration(): Stmt {
+    if (this.match(TokenType.CLASS)) {
+      return this.classDeclaration();
+    }
     if (this.match(TokenType.VAR)) {
       return this.varDeclaration();
     }
@@ -121,6 +131,19 @@ export class Parser {
       return this.functionDeclaration("function");
     }
     return this.statement();
+  }
+
+  private classDeclaration(): Stmt {
+    const name = this.consume(TokenType.IDENTIFIER, "Expect class name."); // the class name
+    this.consume(TokenType.LEFT_BRACE, "Expect '{' before class body."); // consumes the {
+    const methods: Function[] = [];
+    while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
+      // if we don't find } and it isn't the end of the file
+      // we consume methods inside functions
+      methods.push(this.functionDeclaration("method") as Function);
+    }
+    this.consume(TokenType.RIGHT_BRACE, "Expect '}' after class body."); // consumes the }
+    return new Class(name, methods);
   }
 
   private functionDeclaration(kind: string): Stmt {
@@ -295,6 +318,10 @@ export class Parser {
       if (expr instanceof Variable) {
         const name = expr.name;
         return new Assign(name, value); // l-value representation
+      } else if (expr instanceof Get) {
+        // if we find `.` in the expr, then it's a Get expr
+        // then we find `=`, thus converting Get expr into Set expr
+        return new Set(expr.object, expr.name, value);
       }
 
       this.error(equals, "Invalid assignment target.");
@@ -403,6 +430,13 @@ export class Parser {
     while (true) {
       if (this.match(TokenType.LEFT_PAREN)) {
         expr = this.finishCall(expr);
+      } else if (this.match(TokenType.DOT)) {
+        // property access ex. something.some_property where `something` is the expr, and `some_property` is the name
+        const name = this.consume(
+          TokenType.IDENTIFIER,
+          "Expect property name after '.' ."
+        ); // property name
+        expr = new Get(expr, name); // assuming it is a Get expression
       } else {
         break;
       }
@@ -420,6 +454,11 @@ export class Parser {
 
     if (this.match(TokenType.STRING, TokenType.NUMBER)) {
       return new Literal(this.previous().literal);
+    }
+
+    if (this.match(TokenType.THIS)) {
+      // matches `this`
+      return new This(this.previous());
     }
 
     if (this.match(TokenType.IDENTIFIER)) {

@@ -19,6 +19,10 @@ import {
   Literal,
   Logical,
   Unary,
+  Class,
+  Get,
+  Set,
+  This,
 } from "./ast";
 import { Interpreter } from "./interpreter";
 import { Lox } from "./main";
@@ -28,7 +32,14 @@ type Scope = Record<string, boolean>;
 
 enum FunctionType {
   None = "None",
-  Function = "Function",
+  Function = "Function", // whether it's a standalone function
+  Method = "Method", // or a method inside a class
+  Initializer = "Initializer", // an initializer of a class
+}
+
+enum ClassType {
+  None = "None",
+  Class = "Class",
 }
 
 class ScopeStack extends Array<Scope> {
@@ -44,7 +55,8 @@ class ScopeStack extends Array<Scope> {
 export class Resolver implements Visitor<void>, StmtVisitor<void> {
   interpreter: Interpreter;
   scopes: ScopeStack = new ScopeStack();
-  currentFunction = FunctionType.None;
+  currentFunction = FunctionType.None; // indicates whether we are currently inside a function or not
+  currentClass = ClassType.None; // indicates whether we are currently inside a class or not
 
   constructor(interpreter: Interpreter) {
     this.interpreter = interpreter;
@@ -115,6 +127,11 @@ export class Resolver implements Visitor<void>, StmtVisitor<void> {
       Lox.error(stmt.keyword.line, "Can't return from top-level code.");
     }
 
+    if (this.currentFunction === FunctionType.Initializer) {
+      // if we see a `return` statement inside an initilizer, we throw an error
+      Lox.error(stmt.keyword.line, "Can't return a value from an initializer.");
+    }
+
     if (stmt.value !== null) {
       this.resolve(stmt.value);
     }
@@ -139,6 +156,30 @@ export class Resolver implements Visitor<void>, StmtVisitor<void> {
     return;
   }
 
+  visitGetExpr(expr: Get) {
+    this.resolve(expr.object); // object is the instance which is being accessed upon ex. object.some_property
+    // we are not resolving the property which we want to access because it is dynamically evaluated
+    return;
+  }
+
+  visitSetExpr(expr: Set) {
+    this.resolve(expr.value);
+    this.resolve(expr.object);
+    // resolving the instance and the RHS expr.
+    // not resolving the property which will be accessed.
+    return;
+  }
+
+  visitThisExpr(expr: This) {
+    if (this.currentClass === ClassType.None) {
+      // if we are not currently inside a class
+      Lox.error(expr.keyword.line, "Can't use 'this' outside of a class.");
+      return;
+    }
+    this.resolveLocal(expr, expr.keyword);
+    return;
+  }
+
   visitGroupingExpr(expr: Grouping) {
     this.resolve(expr.expression);
     return;
@@ -156,6 +197,33 @@ export class Resolver implements Visitor<void>, StmtVisitor<void> {
 
   visitUnaryExpr(expr: Unary) {
     this.resolve(expr.right);
+    return;
+  }
+
+  visitClassStmt(stmt: Class) {
+    const enclosingClass = this.currentClass;
+    this.currentClass = ClassType.Class; // we are now inside a class
+
+    this.declare(stmt.name);
+    this.define(stmt.name);
+
+    this.beginScope(); // add a new scope
+    this.scopes.peek()["this"] = true; // declare `this` in that scope
+
+    for (const method of stmt.methods) {
+      // resolving the methods inside the class
+      let declaration = FunctionType.Method;
+      if (method.name.lexeme === "init") {
+        // if its an initializer
+        declaration = FunctionType.Initializer;
+      }
+      this.resolveFunction(method, declaration);
+    }
+
+    this.endScope();
+
+    this.currentClass = enclosingClass; // return back to the enclosing class after done
+
     return;
   }
 

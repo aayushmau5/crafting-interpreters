@@ -31,17 +31,21 @@ import {
   Binary,
   Block,
   Call,
+  Class,
   Expr,
   Expression,
   Function,
+  Get,
   Grouping,
   If,
   Literal,
   Logical,
   Print,
   Return,
+  Set,
   Stmt,
   StmtVisitor,
+  This,
   Unary,
   Var,
   Variable,
@@ -52,7 +56,13 @@ import { TokenType, Token } from "./token";
 import { RuntimeError } from "./errors";
 import { Lox } from "./main";
 import { Environment } from "./environment";
-import { LoxCallable, LoxFunction, LoxObject } from "./types";
+import {
+  LoxCallable,
+  LoxClass,
+  LoxFunction,
+  LoxInstance,
+  LoxObject,
+} from "./types";
 
 class Clock extends LoxCallable {
   arity() {
@@ -242,6 +252,28 @@ export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
     return func.call(this, args);
   }
 
+  visitGetExpr(expr: Get) {
+    const object = this.evaluate(expr.object);
+    if (object instanceof LoxInstance) {
+      return object.get(expr.name);
+    }
+    throw new RuntimeError(expr.name, "Only instance have properties.");
+  }
+
+  visitSetExpr(expr: Set) {
+    const object = this.evaluate(expr.object);
+    if (!(object instanceof LoxInstance)) {
+      throw new RuntimeError(expr.name, "Only instance have fields.");
+    }
+    const value = this.evaluate(expr.value);
+    object.set(expr.name, value);
+    return value;
+  }
+
+  visitThisExpr(expr: This) {
+    return this.lookupVariable(expr.keyword, expr);
+  }
+
   visitFunctionStmt(stmt: Function) {
     const func = new LoxFunction(stmt, this.environment);
     this.environment.define(stmt.name.lexeme, func);
@@ -253,6 +285,22 @@ export class Interpreter implements Visitor<LoxObject>, StmtVisitor<void> {
     if (stmt.value != null) value = this.evaluate(stmt.value);
 
     throw new LoxFunction.Return(value);
+  }
+
+  visitClassStmt(stmt: Class) {
+    this.environment.define(stmt.name.lexeme, null);
+
+    const methods = new Map<string, LoxFunction>();
+    for (const method of stmt.methods) {
+      // iterating through every method
+      const isInitializer = method.name.lexeme === "init"; // if method is an initializer(/constructor)
+      const fn = new LoxFunction(method, this.environment, isInitializer);
+      methods.set(method.name.lexeme, fn);
+    }
+
+    const klass = new LoxClass(stmt.name.lexeme, methods);
+    this.environment.assign(stmt.name, klass);
+    return;
   }
 
   private evaluate(expr: Expr): LoxObject {

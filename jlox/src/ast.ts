@@ -1,7 +1,7 @@
 /*
 ----- Lowest Precedence ----
 expression -> assignment ;
-assignment -> IDENTIFIER "=" assignment | logic_or ;
+assignment -> (call ".")? IDENTIFIER "=" assignment | logic_or ;
 logic_or -> logic_and ( "or" logic_and )* ;
 logic_and -> equality ( "and" equality )* ;
 equality (== !=) -> comparison ( ("!=" | "==") comparison )* ;
@@ -9,7 +9,7 @@ comparison (< <= > >=) -> term ( ("<" | "<=" | ">" | ">=") term )* ;
 term (- +) -> factor ( ("-" | "+") factor )* ;
 factor (/ *) -> unary ( ("/" | "*") unary )* ;
 unary (! -) -> ("!" | "-") unary | call ;
-call -> primary ( "(" arguments? ")" )* ;
+call -> primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
 arguments      → expression ( "," expression )* ;
 primary (Literals or parenthezised expressions) -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
 ----- Highest Precedence ----
@@ -41,6 +41,9 @@ export interface Visitor<R> {
   visitAssignExpr(expr: Assign): R;
   visitLogicalExpr(expr: Logical): R;
   visitCallExpr(expr: Call): R;
+  visitGetExpr(expr: Get): R;
+  visitSetExpr(expr: Set): R;
+  visitThisExpr(expr: This): R;
 }
 
 export interface StmtVisitor<R> {
@@ -52,6 +55,7 @@ export interface StmtVisitor<R> {
   visitWhileStmt(expr: While): R;
   visitFunctionStmt(expr: Function): R;
   visitReturnStmt(expr: Return): R;
+  visitClassStmt(expr: Class): R;
 }
 
 export interface Expr {
@@ -89,6 +93,49 @@ export class Call implements Expr {
 
   accept<R>(v: Visitor<R>) {
     return v.visitCallExpr(this);
+  }
+}
+
+export class Get implements Expr {
+  // to get a property from an instance. ex. something.some_property
+  object: Expr; // the object upon which we will access a property
+  name: Token; // the name of the property
+  constructor(object: Expr, name: Token) {
+    this.object = object;
+    this.name = name;
+  }
+
+  accept<R>(v: Visitor<R>) {
+    return v.visitGetExpr(this);
+  }
+}
+
+export class Set implements Expr {
+  // to set a property in an instance. ex. something.some_property = some_value
+  object: Expr;
+  name: Token;
+  value: Expr;
+
+  constructor(object: Expr, name: Token, value: Expr) {
+    this.object = object;
+    this.name = name;
+    this.value = value;
+  }
+
+  accept<R>(v: Visitor<R>) {
+    return v.visitSetExpr(this);
+  }
+}
+
+export class This implements Expr {
+  // for `this` access on class methods
+  keyword: Token;
+  constructor(keyword: Token) {
+    this.keyword = keyword;
+  }
+
+  accept<R>(v: Visitor<R>) {
+    return v.visitThisExpr(this);
   }
 }
 
@@ -139,6 +186,19 @@ export class Unary implements Expr {
 
   accept<R>(visitor: Visitor<R>) {
     return visitor.visitUnaryExpr(this);
+  }
+}
+
+export class Class implements Stmt {
+  name: Token;
+  methods: Function[];
+  constructor(name: Token, methods: Function[]) {
+    this.name = name;
+    this.methods = methods;
+  }
+
+  accept<R>(v: StmtVisitor<R>) {
+    return v.visitClassStmt(this);
   }
 }
 
