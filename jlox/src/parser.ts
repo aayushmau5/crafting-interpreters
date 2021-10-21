@@ -1,7 +1,7 @@
 /*
 program        → declaration* EOF ;
 declaration    → classDecl | funcDecl | varDecl | statement ;
-classDecl      → "class" IDENTIFIER "{" function* "}" ;
+classDecl      → "class" IDENTIFIER ( "<" IDENTIFIER )? "{" function* "}" ;
 funcDecl       → "fun" function;
 function       → IDENTIFIER "(" parameters? ")" block ;
 parameters     → IDENTIFIER ( "," IDENTIFIER )* ;
@@ -22,7 +22,7 @@ factor (/ *)   → unary ( ("/" | "*") unary )* ;
 unary (! -)    → ("!" | "-") unary | call ;
 call           → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
 arguments      → expression ( "," expression )* ;
-primary (Literals or parenthesized expressions) → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
+primary (Literals or parenthesized expressions) → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER | "this" | "super" "." IDENTIFIER ;
 
 a program is a list of statements
 
@@ -81,6 +81,7 @@ import {
   Return,
   Set,
   Stmt,
+  Super,
   This,
   Unary,
   Var,
@@ -135,6 +136,13 @@ export class Parser {
 
   private classDeclaration(): Stmt {
     const name = this.consume(TokenType.IDENTIFIER, "Expect class name."); // the class name
+
+    let superclass = null;
+    if (this.match(TokenType.LESS)) {
+      this.consume(TokenType.IDENTIFIER, "Expect superclass name.");
+      superclass = new Variable(this.previous());
+    }
+
     this.consume(TokenType.LEFT_BRACE, "Expect '{' before class body."); // consumes the {
     const methods: Function[] = [];
     while (!this.check(TokenType.RIGHT_BRACE) && !this.isAtEnd()) {
@@ -143,7 +151,7 @@ export class Parser {
       methods.push(this.functionDeclaration("method") as Function);
     }
     this.consume(TokenType.RIGHT_BRACE, "Expect '}' after class body."); // consumes the }
-    return new Class(name, methods);
+    return new Class(name, methods, superclass);
   }
 
   private functionDeclaration(kind: string): Stmt {
@@ -469,6 +477,17 @@ export class Parser {
       const expr = this.expression();
       this.consume(TokenType.RIGHT_PAREN, "Expect ')' after expression.");
       return new Grouping(expr);
+    }
+
+    if (this.match(TokenType.SUPER)) {
+      // matches super.some_method_name
+      const keyword = this.previous();
+      this.consume(TokenType.DOT, "Expect '.' after 'super'.");
+      const method = this.consume(
+        TokenType.IDENTIFIER,
+        "Expect superclass method name."
+      );
+      return new Super(keyword, method);
     }
 
     throw this.error(this.peek(), "Expect expression.");

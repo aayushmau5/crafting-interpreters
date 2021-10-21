@@ -23,6 +23,7 @@ import {
   Get,
   Set,
   This,
+  Super,
 } from "./ast";
 import { Interpreter } from "./interpreter";
 import { Lox } from "./main";
@@ -40,6 +41,7 @@ enum FunctionType {
 enum ClassType {
   None = "None",
   Class = "Class",
+  Subclass = "Subclass",
 }
 
 class ScopeStack extends Array<Scope> {
@@ -207,6 +209,29 @@ export class Resolver implements Visitor<void>, StmtVisitor<void> {
     this.declare(stmt.name);
     this.define(stmt.name);
 
+    if (
+      stmt.superclass !== null &&
+      stmt.name.lexeme === stmt.superclass.name.lexeme
+    ) {
+      Lox.error(
+        stmt.superclass.name.line,
+        "A class can't inherit from itself."
+      );
+    }
+
+    if (stmt.superclass !== null) {
+      this.currentClass = ClassType.Subclass;
+      // resolve the super class
+      this.resolve(stmt.superclass);
+    }
+
+    if (stmt.superclass !== null) {
+      // if the class has a superclass, then we make a new scope
+      // in that scope, we define the name "super"
+      this.beginScope();
+      this.scopes.peek()["super"] = true;
+    }
+
     this.beginScope(); // add a new scope
     this.scopes.peek()["this"] = true; // declare `this` in that scope
 
@@ -222,8 +247,26 @@ export class Resolver implements Visitor<void>, StmtVisitor<void> {
 
     this.endScope();
 
+    if (stmt.superclass !== null) {
+      this.endScope();
+    }
+
     this.currentClass = enclosingClass; // return back to the enclosing class after done
 
+    return;
+  }
+
+  visitSuperExpr(expr: Super) {
+    if (this.currentClass === ClassType.None) {
+      Lox.error(expr.keyword.line, "Can't use 'super' outside of a class.");
+    } else if (this.currentClass !== ClassType.Subclass) {
+      Lox.error(
+        expr.keyword.line,
+        "Can't use 'super' in a class with no superclass."
+      );
+    }
+
+    this.resolveLocal(expr, expr.keyword);
     return;
   }
 

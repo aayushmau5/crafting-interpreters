@@ -79,11 +79,17 @@ export class LoxFunction extends LoxCallable {
 export class LoxClass extends LoxCallable {
   name: string;
   methods: Map<string, LoxFunction>;
+  superclass: LoxClass;
 
-  constructor(name: string, methods: Map<string, LoxFunction>) {
+  constructor(
+    name: string,
+    superclass: LoxClass,
+    methods: Map<string, LoxFunction>
+  ) {
     super();
     this.name = name;
     this.methods = methods;
+    this.superclass = superclass;
   }
 
   call(interpreter: Interpreter, args: LoxObject[]) {
@@ -109,9 +115,13 @@ export class LoxClass extends LoxCallable {
     return this.name;
   }
 
-  findMethod(name: string) {
+  findMethod(name: string): LoxFunction | null {
     if (this.methods.has(name)) {
-      return this.methods.get(name);
+      return this.methods.get(name)!;
+    }
+
+    if (this.superclass !== null) {
+      return this.superclass.findMethod(name);
     }
 
     return null;

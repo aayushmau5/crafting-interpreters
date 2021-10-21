@@ -44,6 +44,7 @@ export interface Visitor<R> {
   visitGetExpr(expr: Get): R;
   visitSetExpr(expr: Set): R;
   visitThisExpr(expr: This): R;
+  visitSuperExpr(expr: Super): R;
 }
 
 export interface StmtVisitor<R> {
@@ -127,6 +128,20 @@ export class Set implements Expr {
   }
 }
 
+export class Super implements Expr {
+  // getting the method from a super class. Ex. super.something
+  keyword: Token;
+  method: Token;
+  constructor(keyword: Token, method: Token) {
+    this.keyword = keyword;
+    this.method = method;
+  }
+
+  accept<R>(v: Visitor<R>) {
+    return v.visitSuperExpr(this);
+  }
+}
+
 export class This implements Expr {
   // for `this` access on class methods
   keyword: Token;
@@ -191,10 +206,13 @@ export class Unary implements Expr {
 
 export class Class implements Stmt {
   name: Token;
+  superclass: Variable | null; // the super class of the current class
   methods: Function[];
-  constructor(name: Token, methods: Function[]) {
+
+  constructor(name: Token, methods: Function[], superclass: Variable | null) {
     this.name = name;
     this.methods = methods;
+    this.superclass = superclass;
   }
 
   accept<R>(v: StmtVisitor<R>) {
